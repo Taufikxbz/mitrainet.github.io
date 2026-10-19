@@ -260,7 +260,7 @@ textarea { resize: vertical; line-height: 1.55; }
     </div>
     <div class="top-actions">
       <label class="btn" for="berkas">Impor Excel<input class="file-input" type="file" id="berkas" accept=".xlsx,.xls,.csv"></label>
-      <button class="btn" id="btn-ekspor" type="button" hidden>Ekspor Excel<span class="dot" id="dot-ekspor" hidden></span></button>
+      <button class="btn" id="btn-ekspor" type="button">Ekspor Excel<span class="dot" id="dot-ekspor" hidden></span></button>
       <span class="hint" id="ekspor-note" hidden>Ekspor tidak tersedia di tampilan ini</span>
       <button class="btn primary" id="btn-tambah" type="button">Tambah tagihan</button>
     </div>
@@ -885,16 +885,7 @@ textarea { resize: vertical; line-height: 1.55; }
     setMsg('Data contoh dikosongkan. Impor file Excel atau tambahkan tagihan pertama.', '');
   });
 
-  /* ---------- Ekspor Excel ---------- */
-  var dlPromise = null;
-  function getDl() {
-    if (!dlPromise) {
-      dlPromise = (window.claude && window.claude.use)
-        ? Promise.resolve(window.claude.use('downloads')).catch(function () { return null; })
-        : Promise.resolve(null);
-    }
-    return dlPromise;
-  }
+  /* ---------- Ekspor Excel: unduh langsung dari browser ---------- */
   function exportName() {
     var n = state.fileName ? state.fileName.replace(/\.[^.]*$/, '') : 'data-tagihan';
     n = n.replace(/[\\\/:*?"<>|]/g, '-').trim() || 'data-tagihan';
@@ -919,24 +910,18 @@ textarea { resize: vertical; line-height: 1.55; }
   el('btn-ekspor').addEventListener('click', function () {
     if (!window.XLSX) { setMsg('Pustaka Excel belum termuat. Muat ulang halaman lalu coba lagi.', 'err'); return; }
     if (state.rows.length === 0) { setMsg('Belum ada tagihan untuk diekspor.', 'warn'); return; }
-    getDl().then(function (dl) {
-      if (!dl) { setMsg('Ekspor tidak tersedia di tampilan ini.', 'err'); return; }
+    try {
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, buildSheet(), 'Tagihan');
-      var data = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      return dl.save({ filename: exportName(), data: data }).then(function () {
-        state.dirty = false; state.sample = false; persist(); render();
-        setMsg('File Excel disimpan.', 'ok');
-      }, function (err) {
-        if (err && err.code === 'declined') setMsg('Penyimpanan dibatalkan.', '');
-        else setMsg('File Excel tidak bisa disimpan di tampilan ini.', 'err');
-      });
-    });
+      // XLSX.writeFile menggunakan mekanisme unduhan browser, tanpa API khusus Claude.
+      XLSX.writeFile(wb, exportName());
+      state.dirty = false; state.sample = false; persist(); render();
+      setMsg('File Excel siap diunduh. Periksa folder Downloads browser Anda.', 'ok');
+    } catch (err) {
+      setMsg('File Excel tidak bisa dibuat. Muat ulang halaman lalu coba lagi.', 'err');
+    }
   });
-  getDl().then(function (dl) {
-    el('btn-ekspor').hidden = !dl;
-    el('ekspor-note').hidden = !!dl;
-  });
+  el('ekspor-note').hidden = true;
 
   render();
 })();
